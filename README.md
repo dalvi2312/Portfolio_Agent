@@ -1,251 +1,315 @@
-# Portfolio Intelligence Agent – Solution Documentation
+# Portfolio Copilot: Natural Language Asset Management 💼
 
 ## Overview
 
-An AI-powered agent that answers natural-language questions about portfolio data.  
-Built with **LangGraph** (agentic workflow), **LangChain** (tool abstractions), and **Google Gemini** (LLM), backed by a **SQLite** database populated from the provided CSV data.
+An AI-powered agent that answers natural-language questions about portfolio data.
+
+Built with:
+
+* **LangGraph** → Agentic workflow orchestration
+* **LangChain** → Tool abstractions and integrations
+* **Qwen2.5:7b** via **Ollama** → Local LLM inference
+* **SQLite** → Database layer populated from CSV data
+
+The system enables users to query portfolio information conversationally while maintaining local execution and data privacy. 📊
 
 ---
 
-## Architecture
+# Quick Start 🚀
 
-```
-                        ┌─────────────────────────────────────────┐
-                        │           LangGraph Agent Graph          │
-                        │                                          │
-  User Question  ──────►│  START → llm_node ──tool_call?──► tools_node
-                        │              ▲                       │
-                        │              └───────────────────────┘
-                        │          no tool_call → END          │
-                        └─────────────────────────────────────────┘
-                                        │
-                         ┌──────────────┴──────────────┐
-                         │                             │
-                  sql_query_tool            exposure_calculator_tool
-                         │                             │
-                  Gemini generates SQL        Queries DB directly
-                  → SQLite executes          → Aggregates weights
-                  → Formats results          → Normalises to 100%
-```
+## 1. Clone / Copy Project Files
 
-### Components
+Your project directory should look like this:
 
-| File / Module | Role |
-|---|---|
-| `setup_database.py` | One-time script: loads CSVs → SQLite |
-| `db/database.py` | SQLite connection manager + schema introspection |
-| `tools/sql_tool.py` | LangChain tool: NL → Gemini SQL → SQLite |
-| `tools/exposure_calculator.py` | LangChain tool: portfolio name → sector % |
-| `agent/state.py` | LangGraph `TypedDict` state schema |
-| `agent/prompts.py` | All LLM prompt templates |
-| `agent/agent.py` | LangGraph graph + `PortfolioAgent` class |
-| `main.py` | CLI entry point (REPL + single-question mode) |
-| `evaluator.py` | Ground-truth evaluation script |
-| `streamlit_app.py` | Optional web UI |
-
----
-
-## Quick Start
-
-### 1 – Clone / copy project files
-
-```bash
-# Your project directory should contain:
+```text
 portfolio_agent/
-├── data/                    ← CSV files (provided)
-├── database_schema.sql      ← SQL schema (provided)
+├── data/                          # CSV files (provided)
+├── database_schema.sql            # SQL schema (provided)
 ├── ground_truth_dataset.json
 ├── requirements.txt
-├── .env.example
 ├── setup_database.py
 ├── db/
 ├── tools/
 ├── agent/
-├── main.py
 ├── evaluator.py
 └── streamlit_app.py
 ```
 
-### 2 – Create a virtual environment
+---
+
+## 2. Create a Virtual Environment
 
 ```bash
 python -m venv .venv
+```
 
-# macOS / Linux
+### macOS / Linux
+
+```bash
 source .venv/bin/activate
+```
 
-# Windows
+### Windows
+
+```bash
 .venv\Scripts\activate
 ```
 
-### 3 – Install dependencies
+---
+
+## 3. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4 – Set up your API key
+---
+
+## 4. Download & Serve Qwen2.5:7b from Ollama 🦙
+
+Make sure you have Ollama installed on your machine.
+
+### Pull the model
 
 ```bash
-cp .env.example .env
-# Open .env and set GEMINI_API_KEY=<your key>
-# Get a free key at: https://ai.google.dev/gemini-api/docs
+ollama pull qwen2.5:7b
 ```
 
-### 5 – Build the database
+### Start the Ollama server
 
 ```bash
-python setup_database.py
-```
-
-Expected output:
-```
-INFO: Schema created successfully.
-INFO: Loaded 10 rows into table 'sectors'.
-INFO: Loaded 29 rows into table 'securities'.
-...
-── Database verification ──────────────────────────
-  sectors                          10 rows
-  securities                       29 rows
-  portfolios                       13 rows
-  holdings                        ~80 rows
-  ...
-INFO: Database setup complete: portfolio_database.db
+ollama serve
 ```
 
 ---
 
-## Running the Agent
+# Running the Application 💻
 
-### Interactive REPL
-
-```bash
-python main.py
-```
-
-```
-╔══════════════════════════════════════════════════════╗
-║          Portfolio Intelligence Agent  🏦             ║
-║  Type a question or 'quit' / 'exit' to stop.         ║
-╚══════════════════════════════════════════════════════╝
-
-Example questions:
-  1. How many portfolios do we have in total?
-  ...
-
-You: How many portfolios do we have in total?
-Agent: We have 13 portfolios in total.
-
-You: What are the sector exposures for the Tech Innovation Fund?
-Agent: Sector Exposure Breakdown – Tech Innovation Fund
-       Technology         72.50%
-       Consumer Disc.     15.00%
-       ...
-```
-
-### Single question (non-interactive)
-
-```bash
-python main.py --question "What is the total AUM for high risk portfolios?"
-```
-
-### Verbose mode (shows tool selection, generated SQL)
-
-```bash
-python main.py --verbose
-```
-
----
-
-## Running the Evaluator
-
-```bash
-# Evaluate all 10 ground-truth questions
-python evaluator.py
-
-# Only SQL questions
-python evaluator.py --type text2sql
-
-# Only exposure calculator questions
-python evaluator.py --type exposure_calculator
-
-# Specific question IDs
-python evaluator.py --id 1 5 9
-
-# Save results to JSON
-python evaluator.py --output eval_results.json
-```
-
-Sample output:
-```
-Evaluating 10 question(s)…
-
-[1/10] Q1 (text2sql, easy):
-  Q: How many portfolios do we have in total?
-  A: 13
-  ✅ PASS: Correct count returned
-  ⏱  2.1s
-
-[9/10] Q9 (exposure_calculator, medium):
-  Q: What are the sector exposures for the Tech Innovation Fund?
-  A: Sector Exposure Breakdown – Tech Innovation Fund ...
-  ✅ PASS: Sector percentages provided for correct portfolio
-  ⏱  1.3s
-
-════════════════════════════════════════════
-EVALUATION SUMMARY
-════════════════════════════════════════════
-  Total questions :  10
-  ✅ PASS          :   9
-  ❌ FAIL          :   1
-  ⚠️  ERROR         :   0
-  Accuracy        : 90.0%
-```
-
----
-
-## Optional Streamlit UI
+Once the Ollama server is running, launch the Streamlit interface:
 
 ```bash
 streamlit run streamlit_app.py
-# Opens at http://localhost:8501
+```
+
+The application will open automatically at:
+
+```text
+http://localhost:8501
 ```
 
 ---
 
-## Tool Selection Logic
+# Running the Evaluator 🧪
 
-The agent uses Gemini's function-calling to choose the right tool:
+Ensure the local Ollama instance is running before executing evaluations.
 
-| Question type | Tool selected |
-|---|---|
-| Count / list portfolios | `sql_query_tool` |
-| Filter / search by attribute | `sql_query_tool` |
-| Aggregation (SUM, AVG) | `sql_query_tool` |
-| Multi-table JOINs | `sql_query_tool` |
+## Evaluate all ground-truth questions
+
+```bash
+python evaluator.py
+```
+
+## Evaluate only SQL questions
+
+```bash
+python evaluator.py --type text2sql
+```
+
+## Evaluate only exposure calculator questions
+
+```bash
+python evaluator.py --type exposure_calculator
+```
+
+## Evaluate specific question IDs
+
+```bash
+python evaluator.py --id 1 5 9
+```
+
+---
+
+# Output Logs & Improvements 📝
+
+## Results Logging
+
+The final execution results generated by the agent are continuously appended to:
+
+```text
+final_result.txt
+```
+
+This file can be used for debugging, auditing, and performance analysis.
+
+---
+
+## Optimizing Accuracy 💡
+
+Local models may occasionally vary in formatting or reasoning consistency.
+
+Accuracy can be improved by:
+
+* Refining prompt templates
+* Improving schema descriptions
+* Adding better tool-selection examples
+* Strengthening output-format instructions
+* Enhancing few-shot examples
+
+---
+
+# Tool Selection Logic 🛠️
+
+The agent uses the LLM’s reasoning and tool-calling capabilities to dynamically choose the appropriate tool.
+
+| Query Type                         | Tool Selected              |
+| ---------------------------------- | -------------------------- |
+| Count / list portfolios            | `sql_query_tool`           |
+| Filter / search by attributes      | `sql_query_tool`           |
+| Aggregations (`SUM`, `AVG`, etc.)  | `sql_query_tool`           |
+| Multi-table joins                  | `sql_query_tool`           |
 | Sector exposure / weight breakdown | `exposure_calculator_tool` |
 
 ---
 
-## Design Decisions
+# Design Decisions 🧠
 
-1. **LangGraph ReAct loop** – The graph loops `llm_node → tools_node → llm_node` until Gemini stops requesting tools. This naturally handles multi-step reasoning without custom orchestration code.
+## 1. LangGraph ReAct Loop
 
-2. **Schema injection** – The full table schema is injected into every SQL-generation prompt so Gemini always has accurate column names and types.
+The workflow follows a ReAct-style execution loop:
 
-3. **Read-only SQL guard** – `DatabaseManager.execute_query()` rejects any statement that doesn't start with `SELECT`, `WITH`, or `EXPLAIN`, preventing accidental data modification.
+```text
+llm_node → tools_node → llm_node
+```
 
-4. **Exposure normalisation** – Sector weights are normalised over the equity-only sub-total (not the full portfolio weight including bonds), matching the README requirement.
+The loop continues until Qwen2.5 stops requesting tools.
 
-5. **Semantic evaluation** – Instead of exact-match string comparison, the evaluator uses Gemini as a judge, which handles rephrased but correct answers gracefully.
+### Benefits
+
+* Supports multi-step reasoning
+* Enables iterative tool usage
+* Avoids custom orchestration complexity
+* Works efficiently with local models
 
 ---
 
-## Environment Variables
+## 2. Local Model Deployment
 
-| Variable | Default | Description |
-|---|---|---|
-| `GEMINI_API_KEY` | *(required)* | Google AI Studio API key |
-| `DB_PATH` | `portfolio_database.db` | SQLite database path |
-| `GEMINI_MODEL` | `gemini-1.5-flash` | Gemini model to use |
-| `LOG_LEVEL` | `INFO` | Python logging level |
+The project uses **Qwen2.5:7b** through **Ollama** for fully local inference.
+
+### Advantages
+
+* Improved data privacy
+* No dependency on external APIs
+* Reduced latency
+* Offline execution capability
+* Lower operational cost
+
+---
+
+## 3. Schema Injection
+
+The complete database schema is injected into SQL-generation prompts.
+
+### Purpose
+
+This ensures the model always has:
+
+* Accurate table names
+* Correct column names
+* Proper data types
+* Relationship context
+
+This significantly improves SQL-generation reliability.
+
+---
+
+## 4. Read-Only SQL Guard
+
+`DatabaseManager.execute_query()` strictly rejects queries that do not begin with:
+
+```sql
+SELECT
+WITH
+EXPLAIN
+```
+
+### Security Benefits
+
+* Prevents accidental data modification
+* Blocks destructive SQL operations
+* Protects the database from unsafe LLM-generated queries
+
+---
+
+## 5. Exposure Normalization
+
+Sector exposure weights are normalized using the:
+
+```text
+Equity-only subtotal
+```
+
+instead of the full portfolio weight (including bonds or other assets).
+
+### Reason
+
+This maintains alignment with the required business logic and ensures accurate sector exposure calculations.
+
+---
+
+## 6. Semantic Evaluation
+
+The evaluator uses **Qwen as a judge** instead of relying solely on exact string matching.
+
+### Benefits
+
+* Handles paraphrased responses
+* Supports semantically equivalent answers
+* Produces more realistic evaluation metrics
+* Reduces false negatives
+
+---
+
+# Architecture Summary ⚙️
+
+```text
+User Query
+    ↓
+LangGraph Agent
+    ↓
+Reasoning + Tool Selection
+    ↓
+SQL Tool / Exposure Tool
+    ↓
+SQLite Database
+    ↓
+Formatted Final Response
+```
+
+---
+
+# Tech Stack 📦
+
+| Component              | Technology                    |
+| ---------------------- | ----------------------------- |
+| Workflow Orchestration | LangGraph                     |
+| Tool Framework         | LangChain                     |
+| LLM                    | Qwen2.5:7b                    |
+| Model Serving          | Ollama                        |
+| Database               | SQLite                        |
+| Frontend               | Streamlit                     |
+| Evaluation             | Custom Evaluator + Qwen Judge |
+
+---
+
+# Key Features ✨
+
+* Natural-language portfolio querying
+* Agentic multi-step reasoning
+* Local LLM execution
+* Secure read-only SQL execution
+* Dynamic tool selection
+* Sector exposure calculations
+* Semantic answer evaluation
+* Streamlit-based UI
+* Fully offline-capable architecture
