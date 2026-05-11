@@ -1,13 +1,3 @@
-"""
-setup_database.py
-─────────────────
-Reads the SQL schema and all CSV files from ./data/, then populates a local
-SQLite database (portfolio_database.db) that the agent will query at runtime.
-
-Usage:
-    python setup_database.py
-"""
-
 import sqlite3
 import pandas as pd
 import os
@@ -15,14 +5,11 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
-
-# ── Paths ──────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_SQL = os.path.join(BASE_DIR, "database_schema.sql")
 DATA_DIR   = os.path.join(BASE_DIR, "data")
 DB_PATH    = os.path.join(BASE_DIR, "portfolio_database.db")
 
-# ── CSV → table mapping (load order respects FK dependencies) ─────────────────
 CSV_TABLE_ORDER = [
     ("sectors.csv",             "sectors"),
     ("benchmarks.csv",          "benchmarks"),
@@ -53,8 +40,6 @@ def load_csv(conn: sqlite3.Connection, csv_filename: str, table_name: str) -> No
         return
 
     df = pd.read_csv(csv_path)
-
-    # Replace NaN with None so SQLite stores NULL rather than the string 'nan'
     df = df.where(pd.notnull(df), None)
 
     df.to_sql(table_name, conn, if_exists="replace", index=False)
@@ -62,7 +47,6 @@ def load_csv(conn: sqlite3.Connection, csv_filename: str, table_name: str) -> No
 
 
 def verify_database(conn: sqlite3.Connection) -> None:
-    """Run quick sanity checks after loading."""
     cursor = conn.cursor()
     tables = ["sectors", "securities", "portfolios", "holdings",
               "transactions", "historical_prices", "portfolio_performance",

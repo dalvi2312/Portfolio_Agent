@@ -1,4 +1,4 @@
-(.venv) PS D:\Projects\portfolio_agent> python .\evaluator.py
+(.venv) PS D:\Projects\portfolio_agent> python .\evaluator.py                                                                                                          
 D:\Projects\portfolio_agent\.venv\Lib\site-packages\langgraph\cache\base\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.
   from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
@@ -8,13 +8,23 @@ Evaluating 10 question(s)...
   Q: How many portfolios do we have in total?
   A: We have 13 portfolios in total.
   [PASS] The answer correctly states the total number of portfolios as 13.
-  Time: 18.59s
+  Time: 39.78s
 
 [2/10] Q2 (text2sql, easy):
   Q: What are the names of all active portfolios?
-  A: There are no active portfolios.
-  [FAIL] The answer only provides a statement and does not list the actual names of any portfolios.
-  Time: 10.77s
+  A: portfolio_name
+--------------
+Growth Equity Fund
+Conservative Income Fund
+Tech Innovation Fund
+Balanced Portfolio
+ESG Sustainable Fund
+Small Cap Value Fund
+International Equity Fund
+Fixed Income Plus
+...
+  [PASS] The answer correctly lists the names of all active portfolios as requested.
+  Time: 19.06s
 
 [3/10] Q3 (text2sql, easy):
   Q: Which securities are in the Technology sector?
@@ -28,50 +38,73 @@ CRM | Salesforce Inc.
 GOOGL | Alphabet Inc.
 META | Meta Platf...
   [PASS] The answer correctly provides the requested data in a table format that matches the expected result type and directly addresses the question.
-  Time: 19.36s
+  Time: 23.98s
 
 [4/10] Q4 (text2sql, medium):
   Q: What is the total Assets Under Management (AUM) for portfolios with high target risk level?
   A: The total Assets Under Management (AUM) for portfolios with high target risk level is 85000000.0.
   [PASS] The answer correctly provides the total AUM as a single numerical value for portfolios with high target risk level.
-  Time: 14.45s
+  Time: 18.74s
 
 [5/10] Q5 (text2sql, medium):
   Q: Show me the top 5 holdings by cost basis in the Growth Equity Fund
   A: Here are the top 5 holdings by cost basis in the Growth Equity Fund:
 
-| security_id | symbol | company_name         | cost_basis | percentage_of_total_cost_basis |
-|-------------|--------|------------...
-  [PASS] The answer correctly provides a table of the top 5 holdings by cost basis in the Growth Equity Fund.
-  Time: 50.12s
+| security_id | symbol   | company_name          | cost_basis |
+|-------------|----------|-----------------------|------------|
+| ...
+  [PASS] The answer correctly provides the top 5 holdings by cost basis in the form of a table.
+  Time: 45.08s
 
 [6/10] Q6 (text2sql, medium):
   Q: What is the average current price of securities in each sector?
-ERROR: SQL execution error: no such column: s.sector_name
-Query: SELECT s.sector_name, ROUND(AVG(s.current_price), 2) AS avg_current_price
-FROM securities s
-JOIN sectors se ON s.sector_id = se.sector_id
-GROUP BY s.sector_id;
-ERROR: SQL tool error: no such column: s.sector_name
-  A: Error executing query: no such column: s.sector_name
-  [FAIL] The answer indicates an error and does not provide the requested table of data.
-  Time: 11.65s
+  A: The average current price of securities in each sector is as follows:
+
+| sector_name       | avg_current_price |
+|-------------------|------------------|
+| Automotive        | 248.5            |
+| Con...
+  [PASS] The answer correctly provides the average current price of securities in each sector in a table format.
+  Time: 36.06s
 
 [7/10] Q7 (text2sql, hard):
   Q: For each portfolio, show the total value of Technology sector holdings and what percentage it represents of the total portfolio value
-  A: Here is the requested information:
+  A: The provided portfolios are all 100% invested in Technology sector holdings. Here's a summary:
 
-| portfolio_name                | tech_holdings_value | tech_percentage |
-|-------------------------------|--------------------|----------------|
-| Balanced Portfol...
-  [PASS] The answer correctly provides the requested information in a table format, showing the total value of Technology sector holdings and their percentage representation for each portfolio as well as some totals.
-  Time: 67.98s
+| Portfolio Name | Total Value of Technology Sector Holdings |
+|----------------|-----------------------...
+  [FAIL] The answer does not provide the percentage of Technology sector holdings relative to the total portfolio value for each portfolio.
+  Time: 54.64s
 
 [8/10] Q8 (text2sql, hard):
   Q: Find portfolios that have holdings in more than 5 different sectors and show their diversification metrics
-  A: Query returned no results.
-  [FAIL] The answer only shows SQL code without query results.
-  Time: 34.86s
+ERROR: SQL execution error: no such column: rm.sharpe_ratio
+Query: SELECT 
+    p.portfolio_id,
+    p.portfolio_name,
+    rm.sharpe_ratio,
+    rm.beta,
+    rm.volatility,
+    rm.max_drawdown,
+    COUNT(DISTINCT sec.sector_id) AS sector_count
+FROM 
+    portfolios p
+JOIN 
+    holdings h ON p.portfolio_id = h.portfolio_id
+JOIN 
+    securities s ON h.security_id = s.security_id
+JOIN 
+    sectors sec ON s.sector_id = sec.sector_id
+JOIN 
+    risk_metrics rm ON p.portfolio_id = rm.portfolio_id
+GROUP BY 
+    p.portfolio_id, p.portfolio_name, rm.sharpe_ratio, rm.beta, rm.volatility, rm.max_drawdown
+HAVING 
+    COUNT(DISTINCT sec.sector_id) >= 3;
+ERROR: SQL tool error: no such column: rm.sharpe_ratio
+  A: Error executing query: no such column: rm.sharpe_ratio
+  [FAIL] The answer only shows an error message without returning any data.
+  Time: 30.84s
 
 [9/10] Q9 (exposure_calculator, medium):
   Q: What are the sector exposures for the Tech Innovation Fund?
@@ -82,7 +115,7 @@ Sector                         Exposure (%)
 Technology                          100.00%
 ---...
   [PASS] Lists Technology at 100% for the Tech Innovation Fund — correct.
-  Time: 6.82s
+  Time: 7.54s
 
 [10/10] Q10 (exposure_calculator, medium):
   Q: Calculate the sector exposure breakdown for international equity
@@ -93,34 +126,34 @@ Technology                          100.00%
 | Energy         | 38.00       |
 | Technology     | 3...
   [PASS] The answer provides sector names and their corresponding percentages, relates to the International Equity Fund, and the percentages sum up to 100%.
-  Time: 12.12s
+  Time: 13.35s
 
 ============================================================
 EVALUATION SUMMARY
 ============================================================
   Total questions : 10
-  PASS            : 7
-  FAIL            : 3
+  PASS            : 8
+  FAIL            : 2
   ERROR           : 0
-  Accuracy        : 70.0%
+  Accuracy        : 80.0%
 
-  text2sql                     5/8 passed
+  text2sql                     6/8 passed
   exposure_calculator          2/2 passed
 
-  Easy                         2/3 passed
-  Medium                       4/5 passed
-  Hard                         1/2 passed
+  Easy                         3/3 passed
+  Medium                       5/5 passed
+  Hard                         0/2 passed
 ============================================================
 
   ID   Type                   Diff     Verdict    Time
   ----------------------------------------------------
-  1    text2sql               easy     PASS      18.6s
-  2    text2sql               easy     FAIL      10.8s
-  3    text2sql               easy     PASS      19.4s
-  4    text2sql               medium   PASS      14.4s
-  5    text2sql               medium   PASS      50.1s
-  6    text2sql               medium   FAIL      11.7s
-  7    text2sql               hard     PASS      68.0s
-  8    text2sql               hard     FAIL      34.9s
-  9    exposure_calculator    medium   PASS       6.8s
-  10   exposure_calculator    medium   PASS      12.1s
+  1    text2sql               easy     PASS      39.8s
+  2    text2sql               easy     PASS      19.1s
+  3    text2sql               easy     PASS      24.0s
+  4    text2sql               medium   PASS      18.7s
+  5    text2sql               medium   PASS      45.1s
+  6    text2sql               medium   PASS      36.1s
+  7    text2sql               hard     FAIL      54.6s
+  8    text2sql               hard     FAIL      30.8s
+  9    exposure_calculator    medium   PASS       7.5s
+  10   exposure_calculator    medium   PASS      13.3s

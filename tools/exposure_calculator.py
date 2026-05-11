@@ -1,18 +1,3 @@
-"""
-tools/exposure_calculator.py
-────────────────────────────
-Sector Exposure Calculator — LangChain StructuredTool.
-
-Uses explicit name/description/args_schema so the tool definition never
-depends on docstring parsing (which is brittle across LangChain versions).
-
-Logic:
-  - Fetch all equity (asset_type = 'Stock') holdings for the portfolio.
-  - Ignore bonds entirely.
-  - Sum current_weight per sector.
-  - Normalise to 100% on an equity-only basis.
-"""
-
 import logging
 from pydantic import BaseModel, Field
 from langchain_core.tools import StructuredTool
@@ -20,8 +5,6 @@ from db.database import get_db
 
 logger = logging.getLogger(__name__)
 
-
-# Pydantic input schema
 class ExposureInput(BaseModel):
     portfolio_name: str = Field(
         description="The exact or approximate name of the portfolio."
@@ -31,7 +14,6 @@ class ExposureInput(BaseModel):
 def _compute_sector_exposures(portfolio_name: str) -> dict:
     db = get_db()
 
-    # Resolve portfolio
     rows = db.execute_query(
         "SELECT portfolio_id, portfolio_name FROM portfolios WHERE portfolio_name = ?",
         (portfolio_name,),
@@ -50,7 +32,6 @@ def _compute_sector_exposures(portfolio_name: str) -> dict:
     portfolio_id  = rows[0]["portfolio_id"]
     resolved_name = rows[0]["portfolio_name"]
 
-    # Equity holdings with sector info
     equity = db.execute_query(
         """
         SELECT s.symbol, sec.sector_name, h.current_weight
@@ -115,8 +96,6 @@ def _run_exposure(portfolio_name: str) -> str:
         logger.error("Exposure calc error: %s", exc)
         return f"Error computing sector exposures: {exc}"
 
-
-# StructuredTool — explicit name/description, no docstring parsing
 exposure_calculator_tool = StructuredTool.from_function(
     func=_run_exposure,
     name="exposure_calculator_tool",

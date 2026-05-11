@@ -1,12 +1,3 @@
-"""
-streamlit_app.py
-────────────────
-Optional Streamlit graphical interface for the Portfolio Agent.
-
-Run with:
-    streamlit run streamlit_app.py
-"""
-
 import os
 import urllib.request
 
@@ -42,10 +33,9 @@ with st.sidebar:
         if st.button(ex, use_container_width=True, key=ex):
             st.session_state["prefill"] = ex
 
-    st.markdown("---")
-    st.caption("Powered by Ollama + LangGraph")
+    # st.markdown("---")
+    # st.caption("Powered by Ollama + LangGraph")
 
-# Pre-flight: database
 db_path = os.getenv("DB_PATH", "portfolio_database.db")
 if not os.path.exists(db_path):
     st.error(
@@ -54,7 +44,6 @@ if not os.path.exists(db_path):
     )
     st.stop()
 
-# Pre-flight: Ollama connectivity
 base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 try:
     urllib.request.urlopen(f"{base_url}/api/tags", timeout=3)
@@ -65,8 +54,6 @@ except Exception:
         "```\nollama serve\nollama pull llama3:8b\n```"
     )
     st.stop()
-
-# Agent (cached per session)
 @st.cache_resource(show_spinner="Loading agent...")
 def load_agent():
     from agent.agent import PortfolioAgent
@@ -74,21 +61,17 @@ def load_agent():
 
 agent = load_agent()
 
-# Chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 st.title("Portfolio Intelligence Agent 🏦")
 
-# Render existing history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Handle sidebar example-button pre-fill
 prefill = st.session_state.pop("prefill", None)
 
-# Chat input
 user_input = st.chat_input("Ask a question about your portfolio data...") or prefill
 
 if user_input:

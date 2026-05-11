@@ -1,15 +1,3 @@
-"""
-db/database.py
-──────────────
-Provides a thin wrapper around sqlite3 for the portfolio agent.
-
-Key responsibilities:
-- Manage a single shared connection to portfolio_database.db
-- Expose safe query execution with parameter binding
-- Return results as lists-of-dicts (easy to JSON-serialise / pass to LLM)
-- Provide schema introspection so the SQL tool can embed table info in prompts
-"""
-
 import os
 import sqlite3
 import logging
@@ -24,13 +12,10 @@ DB_PATH = os.getenv("DB_PATH", "portfolio_database.db")
 
 
 class DatabaseManager:
-    """Thread-safe SQLite wrapper for the portfolio database."""
 
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self._conn: sqlite3.Connection | None = None
-
-    # ── Connection management ──────────────────────────────────────────────
 
     def connect(self) -> None:
         if self._conn is None:
@@ -40,7 +25,7 @@ class DatabaseManager:
                     "Run `python setup_database.py` first."
                 )
             self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            self._conn.row_factory = sqlite3.Row          # column-name access
+            self._conn.row_factory = sqlite3.Row         
             self._conn.execute("PRAGMA foreign_keys = ON")
             logger.debug("Connected to database: %s", self.db_path)
 
@@ -56,23 +41,11 @@ class DatabaseManager:
     def __exit__(self, *_):
         self.disconnect()
 
-    # ── Query execution ────────────────────────────────────────────────────
-
     def execute_query(
         self,
         sql: str,
         params: tuple[Any, ...] = (),
     ) -> list[dict]:
-        """
-        Execute a SELECT query and return results as a list of dicts.
-
-        Args:
-            sql:    A SQL SELECT statement (no DDL / DML).
-            params: Optional tuple of bind parameters (prevents SQL injection).
-
-        Returns:
-            List of row-dicts, e.g. [{"portfolio_name": "Growth Equity Fund", …}, …]
-        """
         self.connect()
         sql = sql.strip()
 
@@ -92,13 +65,7 @@ class DatabaseManager:
             logger.error("SQL execution error: %s\nQuery: %s", exc, sql)
             raise
 
-    # ── Schema introspection ───────────────────────────────────────────────
-
     def get_schema_summary(self) -> str:
-        """
-        Return a concise, human-readable summary of all tables and their columns.
-        Injected into the SQL-generation prompt so Gemini knows the schema.
-        """
         self.connect()
         cursor = self._conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
@@ -115,16 +82,12 @@ class DatabaseManager:
         return "\n".join(lines)
 
     def get_table_sample(self, table: str, limit: int = 3) -> list[dict]:
-        """Return a small sample of rows for a given table (for debugging)."""
         return self.execute_query(f"SELECT * FROM {table} LIMIT {limit}")
 
-
-# ── Module-level singleton ─────────────────────────────────────────────────────
 _db_manager: DatabaseManager | None = None
 
 
 def get_db() -> DatabaseManager:
-    """Return the module-level DatabaseManager singleton."""
     global _db_manager
     if _db_manager is None:
         _db_manager = DatabaseManager()

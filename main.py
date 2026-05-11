@@ -1,19 +1,3 @@
-"""
-main.py
-───────
-Command-line interface for the Portfolio Agent (Ollama / llama3:8b).
-
-Usage:
-    # Interactive REPL
-    python main.py
-
-    # Single question (non-interactive)
-    python main.py --question "How many portfolios do we have?"
-
-    # Verbose mode (shows tool selection, generated SQL, etc.)
-    python main.py --verbose
-"""
-
 import argparse
 import logging
 import os
@@ -34,7 +18,6 @@ def _configure_logging(verbose: bool) -> None:
 
 
 def _check_prerequisites() -> None:
-    """Fail fast with a clear message if setup is incomplete."""
     db_path = os.getenv("DB_PATH", "portfolio_database.db")
     if not os.path.exists(db_path):
         print(
@@ -43,7 +26,6 @@ def _check_prerequisites() -> None:
         )
         sys.exit(1)
 
-    # Quick Ollama connectivity check
     import urllib.request
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     try:
@@ -58,11 +40,9 @@ def _check_prerequisites() -> None:
 
 
 BANNER = """
-+------------------------------------------------------+
 |       Portfolio Intelligence Agent                   |
 |  Powered by Ollama (llama3:8b) + LangGraph           |
 |  Type a question or 'quit' to exit.                  |
-+------------------------------------------------------+
 """
 
 EXAMPLE_QUESTIONS = [

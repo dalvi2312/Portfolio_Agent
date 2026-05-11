@@ -1,27 +1,3 @@
-"""
-evaluator.py
-────────────
-Evaluates the Portfolio Agent against ground_truth_dataset.json.
-
-For each question the evaluator:
-  1. Runs it through the agent.
-  2. Uses Ollama as a semantic judge (PASS / FAIL).
-  3. Prints a per-question table and an accuracy summary.
-
-Judge design
-────────────
-The judge prompt is kept strict and concrete to avoid vague responses.
-The verdict parser looks for the FIRST occurrence of PASS or FAIL anywhere
-in the response (not just at the start), which handles numbered/bulleted
-judge outputs that previously caused false FAILs.
-
-Usage:
-    python evaluator.py                     # all questions
-    python evaluator.py --id 1 5 9          # specific IDs
-    python evaluator.py --type text2sql     # only SQL questions
-    python evaluator.py --output results.json
-"""
-
 import argparse
 import json
 import logging
@@ -38,9 +14,6 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 Verdict = Literal["PASS", "FAIL", "ERROR"]
 
-
-# ── Judge LLM ─────────────────────────────────────────────────────────────────
-
 def _build_judge_llm():
     from langchain_ollama import ChatOllama
     return ChatOllama(
@@ -49,20 +22,7 @@ def _build_judge_llm():
         temperature=0,
     )
 
-
-# ── Verdict parser ────────────────────────────────────────────────────────────
-
 def _parse_verdict(text: str) -> tuple[Verdict, str]:
-    """
-    Extract PASS or FAIL from judge response.
-
-    Searches the ENTIRE response for the first occurrence of PASS or FAIL
-    (case-insensitive). This handles:
-      - "PASS: reason"
-      - "1. PASS: ..."
-      - "The answer is a PASS because..."
-      - Numbered/bulleted lists that start with a number not a verdict word
-    """
     upper = text.upper()
     pass_idx = upper.find("PASS")
     fail_idx = upper.find("FAIL")
@@ -70,20 +30,14 @@ def _parse_verdict(text: str) -> tuple[Verdict, str]:
     if pass_idx == -1 and fail_idx == -1:
         return "FAIL", f"Judge gave unclear response: {text[:120]}"
 
-    # Whichever appears first wins
     if pass_idx != -1 and (fail_idx == -1 or pass_idx < fail_idx):
-        # Extract reason: everything after "PASS" on the same stretch of text
         reason_raw = text[pass_idx + 4 : pass_idx + 250].lstrip(":.- ").strip()
-        # Keep only up to the next newline for brevity
         reason = reason_raw.split("\n")[0].strip() or "Correct"
         return "PASS", reason
     else:
         reason_raw = text[fail_idx + 4 : fail_idx + 250].lstrip(":.- ").strip()
         reason = reason_raw.split("\n")[0].strip() or "Incorrect"
         return "FAIL", reason
-
-
-# ── Prompt builders ───────────────────────────────────────────────────────────
 
 def _build_sql_judge_prompt(
     question: str, agent_answer: str, ground_truth: dict
@@ -144,9 +98,6 @@ Start your response with PASS or FAIL, then give a one-sentence reason.
 Example: PASS: Lists Technology at 100% for a single-sector portfolio — correct.
 Example: FAIL: No percentage values were provided."""
 
-
-# ── Core evaluation loop ──────────────────────────────────────────────────────
-
 def evaluate(
     questions: list[dict],
     filter_ids: list[int] | None = None,
@@ -176,7 +127,6 @@ def evaluate(
         print(f"[{idx}/{total}] Q{q_id} ({q_type}, {difficulty}):")
         print(f"  Q: {q_text}")
 
-        # Run agent
         start_ts = time.time()
         try:
             agent_answer = agent.answer_question(q_text)
@@ -187,7 +137,6 @@ def evaluate(
         display = (agent_answer[:200] + "...") if len(agent_answer) > 200 else agent_answer
         print(f"  A: {display}")
 
-        # Judge
         if agent_answer.startswith(("AGENT ERROR", "Error:")):
             verdict, reason = "ERROR", agent_answer[:120]
         else:
@@ -220,9 +169,6 @@ def evaluate(
         })
 
     return results
-
-
-# ── Summary printer ───────────────────────────────────────────────────────────
 
 def _print_summary(results: list[dict]) -> None:
     total    = len(results)
@@ -261,9 +207,6 @@ def _print_summary(results: list[dict]) -> None:
             f"  {r['id']:<4} {r['type']:<22} {r['difficulty']:<8} "
             f"{r['verdict']:<8} {r['elapsed_s']:>5.1f}s"
         )
-
-
-# ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Portfolio Agent Evaluator")
