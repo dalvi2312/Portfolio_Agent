@@ -72,64 +72,88 @@ def _format_results(rows: list[dict]) -> str:
 
 _SQL_PROMPT_TEMPLATE = """You are an expert SQLite query writer for a portfolio management database.
 
+The EXACT database schema is shown below. This is the authoritative source of truth
+for all table names and column names. Never use a column name that is not listed here.
+
 {schema}
 
-=== STRICT RULES - follow every one of these exactly ===
+=== STRICT RULES — follow every one exactly ===
 
-1. OUTPUT FORMAT
-   - Output ONLY the SQL query inside a ```sql ... ``` code block.
-   - No explanation, no commentary, nothing outside the block.
+RULE 1 — OUTPUT FORMAT
+  Output ONLY the SQL query inside a ```sql ... ``` code block.
+  No explanation, no commentary, nothing outside the block.
 
-2. SAFETY
-   - Only SELECT statements are allowed.
-   - No INSERT, UPDATE, DELETE, DROP, ALTER, or any DDL/DML.
+RULE 2 — SAFETY
+  Only SELECT statements are allowed.
+  Never write INSERT, UPDATE, DELETE, DROP, ALTER, or any DDL/DML.
 
-3. JOIN ALIASES - most common source of column errors
-   - Always assign a unique alias to every table in a JOIN.
-   - ONLY access a column via the alias of the table that OWNS that column.
-   - WRONG example:
-       securities s JOIN sectors sec ON s.sector_id = sec.sector_id
-       ...then writing s.sector_name   <- sector_name belongs to sectors, not securities
-   - RIGHT example:
-       securities s JOIN sectors sec ON s.sector_id = sec.sector_id
-       ...then writing sec.sector_name  <- correct alias
-   - Before writing any column reference, ask: which table defines this column?
-     Use that table's alias.
+RULE 3 — COLUMN NAMES (most important rule)
+  The schema block above is the ONLY source of valid column names.
+  Never invent or guess a column name. If you are unsure, look it up
+  in the schema block first.
+  Consequence of violating this rule: runtime errors like "no such column".
 
-4. STRING VALUES - SQLite is case-sensitive
-   - Portfolio status stored as: 'Active' or 'Inactive'  (capital first letter)
-   - Risk level stored as:       'Low', 'Medium', 'High' (capital first letter)
-   - Asset type stored as:       'Stock', 'Bond'         (capital first letter)
-   - When unsure, use LIKE for safety: WHERE status LIKE 'active'
+RULE 4 — JOIN ALIASES
+  Always give every table a short unique alias in a JOIN.
+  Only access a column via the alias of the TABLE THAT OWNS IT.
 
-5. SCHEMA KNOWLEDGE - key facts
-   - sector_name is a column on the `sectors` table, NOT on `securities`.
-     To get sector name: JOIN securities s ON ... JOIN sectors sec ON s.sector_id = sec.sector_id
-     then use sec.sector_name.
-   - Diversification metrics (sharpe_ratio, beta, volatility, max_drawdown, var_95)
-     are on the `risk_metrics` table. JOIN: risk_metrics rm ON rm.portfolio_id = p.portfolio_id
-   - Holdings market value = h.quantity * s.current_price (join holdings to securities).
-   - cost_basis is a column on the `holdings` table.
-   - current_weight is a column on the `holdings` table (decimal, e.g. 0.15 = 15%).
+  WRONG:
+    FROM securities s
+    JOIN sectors sec ON s.sector_id = sec.sector_id
+    SELECT s.sector_name   ← sector_name belongs to sectors, not securities
 
-6. SECTOR DIVERSIFICATION QUERIES
-   - Count distinct sectors per portfolio:
-       COUNT(DISTINCT sec.sector_id)
-     after joining: holdings h -> securities s -> sectors sec
-   - If asked for portfolios with "more than 5 sectors", write the query with >= 3
-     as the minimum threshold so results are returned even if no portfolio has >5.
-   - Always include the risk_metrics columns when diversification metrics are requested.
+  RIGHT:
+    FROM securities s
+    JOIN sectors sec ON s.sector_id = sec.sector_id
+    SELECT sec.sector_name ← correct alias
 
-7. AGGREGATIONS
-   - Use ROUND(..., 2) for all percentages and financial ratios.
-   - Use COALESCE(value, 0) to handle NULLs in sums.
-   - For percentage of total: ROUND(part * 100.0 / total, 2)
+RULE 5 — AGGREGATION FOR "TOTAL" OR "SUM" QUESTIONS
+  When the question uses words like "total", "sum", "overall", or asks for
+  a single aggregate number, you MUST use SUM() or the appropriate aggregate
+  function to produce ONE result row, not multiple rows.
+
+  WRONG (for "what is the total AUM"):
+    SELECT aum FROM portfolios WHERE risk_level = 'High'
+    ← returns multiple rows, not a total
+
+  RIGHT:
+    SELECT SUM(aum) AS total_aum FROM portfolios WHERE risk_level = 'High'
+    ← returns a single value
+
+RULE 6 — ROUNDING
+  Wrap EVERY numeric output column in ROUND(..., 2).
+  This applies to averages, sums, percentages, ratios, and prices.
+  No raw floating-point values should appear in the result.
+
+  WRONG: AVG(s.current_price)
+  RIGHT: ROUND(AVG(s.current_price), 2) AS avg_current_price
+
+RULE 7 — STRING VALUE CASING (SQLite is case-sensitive)
+  portfolio status : 'Active' or 'Inactive'  (capital A or I)
+  risk level       : 'Low', 'Medium', 'High' (capital first letter)
+  asset type       : 'Stock', 'Bond'         (capital first letter)
+  When unsure: use LIKE for case-insensitive matching.
+
+RULE 8 — SECTOR QUERIES
+  sector_name is a column on the `sectors` table only.
+  To get sector names, you must JOIN to the sectors table.
+  Securities only has sector_id (foreign key), not sector_name.
+
+RULE 9 — RISK / DIVERSIFICATION METRICS
+  Any metrics such as ratios, volatility measures, or risk scores are stored
+  in a separate risk metrics table. Check the schema above for the exact table
+  and column names before writing any such query. Never assume a column name.
+
+RULE 10 — SECTOR COUNT / DIVERSIFICATION
+  To count distinct sectors per portfolio:
+    COUNT(DISTINCT sec.sector_id) after joining holdings → securities → sectors
+  If a question asks "more than N sectors", use >= 3 as the minimum threshold
+  to ensure results are returned, since very few portfolios may have >5 sectors.
 
 === QUESTION ===
 {question}
 
 SQL Query:"""
-
 
 def _run_sql(question: str) -> str:
     db  = get_db()
@@ -156,7 +180,6 @@ def _run_sql(question: str) -> str:
     except Exception as exc:
         logger.error("SQL tool error: %s", exc)
         return f"Error executing query: {exc}"
-
 
 sql_query_tool = StructuredTool.from_function(
     func        = _run_sql,
